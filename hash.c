@@ -1,11 +1,3 @@
-/*
- * HTTP CAPTURE
- * (C)2004-2005 Michael Poppitz
- *
- * Maintains hash table for fast connection lookups.
- *
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

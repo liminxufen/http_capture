@@ -1,9 +1,4 @@
-/*
- * HTTP CAPTURE
- * (C)2014 Liu Feiran
- *
- */
- 
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -14,6 +9,7 @@
 #include <nids.h>
 #include <signal.h>
 #include <time.h>
+#include <librdkafka/rdkafka.h>
 
 #include "stream.h"
 #include "output.h"
@@ -21,6 +17,12 @@
 
 int output_fd;
 int output_size = 0;
+
+rd_kafka_t *rk = NULL;
+rd_kafka_conf_t *conf = NULL;
+rd_kafka_topic_t *rkt = NULL;
+rd_kafka_topic_conf_t *topic_conf = NULL;
+int partition = RD_KAFKA_PARTITION_UA;
 
 void create_conn() {
   struct sockaddr_in sin = {0};
@@ -40,10 +42,29 @@ void create_conn() {
   }
 }
 
+void init_kafka() {
+
+	char errstr[256];
+	conf = rd_kafka_conf_new();
+	if(!(rk = rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)))) {
+		fprintf(stderr, "%% Failed to create new producer: %s\n");
+		exit(1);
+	}
+
+	if(rd_kafka_brokers_add(rk, KAFKA_BROKERS) == 0) {
+		fprintf(stderr, "%% No valid brokers specified\n");
+		exit(1);
+	}
+	
+	rkt = rd_kafka_topic_new(rk, KAFKA_TOPIC, topic_conf);
+	topic_conf = NULL;
+
+}
+
 void handle_pipe(int sig)
 {
   printf("receive sig: %i\n", sig);
-  create_conn(); 
+  create_conn();
 }
 
 void output_init() {
@@ -54,6 +75,9 @@ void output_init() {
   	action.sa_flags = 0;
   	create_conn();
   	sigaction(SIGPIPE, &action, NULL);
+  }
+  if (redis_output == -1) {
+	init_kafka();	
   }
   return;
 }
@@ -72,7 +96,7 @@ int output(struct stream *s)
   if (redis_output == 1) {
     	snprintf(line, sizeof(line),
             "*3\r\n"
-            "$5\r\nRPUSH\r\n"
+            "$7\r\nPUBLISH\r\n"
             "$%u\r\n%s\r\n"
             "$%u\r\n%s\r\n"
             ,
@@ -88,9 +112,22 @@ int output(struct stream *s)
     		return 0;
   	}
   	return count;
+  } else if (redis_output == -1) {
+	char stderr[256];
+	int len = sizeof(line);
+	//memcat(line, '\0', len);
+	snprintf(line, len, "%s", tmp);
+	//printf("%s\n",line);
+	if(rd_kafka_produce(rkt, partition, RD_KAFKA_MSG_F_COPY, line, strlen(line), NULL, 0, NULL) == -1) {
+
+		fprintf(stderr, "%% Failed to produce to topic %s ""partition %i:%s\n", rd_kafka_topic_name(rkt), partition, rd_kafka_err2str(rd_kafka_last_error()));
+		rd_kafka_poll(rk, 0);
+		return 0;
+	}
+
+	return len;
   } else {
   	printf("%s\n", tmp);
 	return 1;
   }
 }
-

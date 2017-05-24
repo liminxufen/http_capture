@@ -37,4 +37,10 @@ char redis_key[256];
 #define REDIS_HOST "127.0.0.1"
 #define REDIS_PORT 6379
 
+#define KAFKA_BROKERS "localhost:9092"
+
+#define KAFKA_TOPIC "data.tsp.httpcapture"
+
+#define PID_FILE_PATH "/var/run/http-capture.pid"
+
 #endif

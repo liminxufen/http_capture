@@ -1,9 +1,3 @@
-/*
- * HTTP CAPTURE
- * (C)2014 Liu Feiran
- *
- */
- 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
